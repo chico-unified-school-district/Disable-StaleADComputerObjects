@@ -26,8 +26,6 @@ Get-PSSession | Remove-PSSession
 $adSession = New-PSSession -ComputerName $DomainController -Credential $ADCredential
 Import-PSSession -Session $adSession -Module ActiveDirectory -AllowClobber
 
-. .\lib\Add-Log.ps1
-
 $cutoff = (Get-date).addyears(-1)
 
 $params = @{
@@ -37,7 +35,6 @@ $params = @{
 
 $staleComputerObjs = Get-ADComputer @params -Filter * | Where-Object { [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff }
 Write-Host 'Stale Computer Objects:'
-# $staleComputerObjs | Select-Object Name, @{n = 'lastlogon'; e = { [datetime]::FromFileTime($_.lastLogonTimestamp) } }
 
 $staleComputerObjs[0] | ForEach-Object {
  $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd')"
