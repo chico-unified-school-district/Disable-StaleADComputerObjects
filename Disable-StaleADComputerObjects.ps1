@@ -36,7 +36,7 @@ $params = @{
 $staleComputerObjs = Get-ADComputer @params -Filter * | Where-Object { [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff }
 Write-Host 'Stale Computer Objects:'
 
-$staleComputerObjs[0] | ForEach-Object {
+$staleComputerObjs | ForEach-Object {
  $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd')"
  Write-Host ('[{0}] Disabling and moving stale object' -f $_.name)
  Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
