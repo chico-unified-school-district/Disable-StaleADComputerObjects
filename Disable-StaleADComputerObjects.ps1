@@ -34,7 +34,7 @@ $params = @{
 }
 
 $staleComputerObjs = Get-ADComputer @params -Filter * | Where-Object { [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff }
-Write-Host 'Stale Computer Objects:'
+Write-Host 'Stale Computer Objects:'git 
 
 $staleComputerObjs | ForEach-Object {
  $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd')"
