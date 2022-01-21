@@ -18,29 +18,43 @@ param (
  [Parameter(Position = 3, Mandatory = $True)]
  [Alias('TargOU')]
  [string]$TargetOrgUnitPath,
+ [Parameter(Position = 4, Mandatory = $False)]
+ [Alias('ExOU')]
+ [string[]]$ExcludedOUs,
  [switch]$WhatIf
 )
 
 Get-PSSession | Remove-PSSession
 # AD Domain Controller Session
 $adSession = New-PSSession -ComputerName $DomainController -Credential $ADCredential
-Import-PSSession -Session $adSession -Module ActiveDirectory -AllowClobber
+Import-PSSession -Session $adSession -Module ActiveDirectory -AllowClobber | Out-Null
 
 $cutoff = (Get-date).addyears(-1)
 
 $params = @{
+ Filter     = { Enabled -eq $True }
  Properties = 'lastLogonTimestamp'
  SearchBase = $SourceOrgUnitPath
 }
 
-$staleComputerObjs = Get-ADComputer @params -Filter * | Where-Object { [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff }
-Write-Host ('Stale Computer Objects:{0}' -f $staleComputerObjs.count)
+$staleComputerObjs = Get-ADComputer @params | Where-Object {
+ [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff -and
+ $_.Enabled -eq $True
+}
+Write-Host ('Stale Computer Objects: {0}' -f $staleComputerObjs.count)
 
 $staleComputerObjs | ForEach-Object {
  $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd')"
- Write-Host ('[{0}] Disabling and moving stale object' -f $_.name)
+ Write-Host ('[{0}] Disabling stale object' -f $_.name)
  Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
- Move-ADObject -Identity $_.ObjectGUID -TargetPath $TargetOrgUnitPath -WhatIf:$WhatIf
+ foreach ($ou in $ExcludedOUs) {
+  if ($_.DistinguishedName -like "*$ou*") {
+   Write-Verbose "$($_.name),Excluded OU. Skipping this computer object"
+   continue
+  }
+  Write-Host ('[{0}] Moving stale object' -f $_.name)
+  Move-ADObject -Identity $_.ObjectGUID -TargetPath $TargetOrgUnitPath -WhatIf:$WhatIf
+ }
 }
 
 Write-Verbose "Tearing down sessions"
