@@ -46,7 +46,7 @@ $staleComputerObjs = Get-ADComputer @params | Where-Object {
 Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Object).count)
 
 $staleComputerObjs | ForEach-Object {
- $oldOu = $_.DistinguishedName
+ $oldOu = $_.DistinguishedName.Substring(0, 25)
  $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd') Old OU: $oldOU"
  Write-Verbose $desc
  Write-Host ('[{0}] Disabling stale object' -f $_.name)
