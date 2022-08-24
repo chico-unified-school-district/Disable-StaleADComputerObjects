@@ -27,7 +27,8 @@ param (
 Get-PSSession | Remove-PSSession
 # AD Domain Controller Session
 $adSession = New-PSSession -ComputerName $DomainController -Credential $ADCredential
-Import-PSSession -Session $adSession -Module ActiveDirectory -AllowClobber | Out-Null
+$cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject'
+Import-PSSession -Session $adSession -CommandName $cmdlets -Module ActiveDirectory -AllowClobber | Out-Null
 
 $cutoff = (Get-date).addyears(-1)
 
@@ -46,7 +47,8 @@ Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Objec
 
 $staleComputerObjs | ForEach-Object {
  $oldOu = $_.DistinguishedName
- $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd') Old OU: {0}" -f $oldOU
+ $desc = "Disabled by Jenkins on $(Get-Date -f 'yyyy-MM-dd') Old OU: {0}" -f $oldOU\
+ Write-Verbose $desc
  Write-Host ('[{0}] Disabling stale object' -f $_.name)
  Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
  foreach ($ou in $ExcludedOUs) {
