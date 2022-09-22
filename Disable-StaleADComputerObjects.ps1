@@ -6,11 +6,10 @@ without extra effort.
 [cmdletbinding()]
 param (
  [Parameter(Position = 0, Mandatory = $True)]
- [Alias('DC', 'Server')]
- [ValidateScript( { Test-Connection -ComputerName $_ -Quiet -Count 1 })]
- [string]$DomainController,
+ [Alias('DCs')]
+ [string[]]$DomainControllers,
  [Parameter(Position = 1, Mandatory = $True)]
- [Alias('ADCred', 'ADCReds')]
+ [Alias('ADCred')]
  [System.Management.Automation.PSCredential]$ADCredential,
  [Parameter(Position = 2, Mandatory = $True)]
  [Alias('SrcOU')]
@@ -21,14 +20,21 @@ param (
  [Parameter(Position = 4, Mandatory = $False)]
  [Alias('ExOU')]
  [string[]]$ExcludedOUs,
+ [Alias('wi')]
  [switch]$WhatIf
 )
 
+. .\lib\New-ADSession.ps1
+. .\lib\Select-DomainController.ps1
+. .\lib\Show-TestRun.ps1
+
+Show-TestRun
+
 Get-PSSession | Remove-PSSession
-# AD Domain Controller Session
-$adSession = New-PSSession -ComputerName $DomainController -Credential $ADCredential
+
+$dc = Select-DomainController $DomainControllers
 $cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject'
-Import-PSSession -Session $adSession -CommandName $cmdlets -Module ActiveDirectory -AllowClobber | Out-Null
+New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
 
 $cutoff = (Get-date).addyears(-1)
 

@@ -8,3 +8,5 @@ logs/*
 *desktop.ini
 dekstop.ini
 notes.txt
+/notes.ps1
+/jenkins.ps1
