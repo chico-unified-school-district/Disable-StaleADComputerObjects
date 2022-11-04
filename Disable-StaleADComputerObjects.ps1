@@ -34,7 +34,7 @@ Get-PSSession | Remove-PSSession
 
 $dc = Select-DomainController $DomainControllers
 $cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject'
-New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
+#New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
 
 $cutoff = (Get-date).addyears(-1)
 
@@ -66,11 +66,24 @@ Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Objec
 # }
 #}
 
-$staleComputerObjs | Where-Object {[datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)} |
+$DeadParams = @{
+ Filter     = { Enabled -eq $False }
+ Properties = 'lastLogonTimestamp'
+ SearchBase = $TargetOrgUnitPath
+}
+
+$DeadComputerObjects = Get-ADComputer @DeadParams |
+ Where-Object {[datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)} | 
+ Sort-Object LastLogonTimeStamp
+
+$DeadComputerObjects |
 ForEach-Object {
 $LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
 Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
+Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
                 }
+
+Write-Host ('Dead Computer Objects: {0}' -f ($DeadComputerObjects | Measure-Object).count)
 
 Write-Verbose "Tearing down sessions"
 Get-PSSession | Remove-PSSession
