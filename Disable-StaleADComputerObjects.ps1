@@ -34,7 +34,7 @@ Get-PSSession | Remove-PSSession
 
 $dc = Select-DomainController $DomainControllers
 $cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject'
-#New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
+New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
 
 $cutoff = (Get-date).addyears(-1)
 
