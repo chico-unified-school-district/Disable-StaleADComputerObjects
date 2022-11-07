@@ -51,20 +51,20 @@ $staleComputerObjs = Get-ADComputer @params | Where-Object {
 
 Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Object).count)
 
-#$staleComputerObjs | ForEach-Object {
-# $oldOu = $_.DistinguishedName
-# $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU:$oldOU"
-# Write-Host ('[{0}] Disabling stale object' -f $_.name)
-# Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
-# foreach ($ou in $ExcludedOUs) {
-#  if ($_.DistinguishedName -like "*$ou*") {
-#   Write-Verbose "$($_.name),Excluded OU. Skipping this computer object"
-#   continue
-#  }
-#  Write-Host ('[{0}] Moving stale object' -f $_.name)
-#  Move-ADObject -Identity $_.ObjectGUID -TargetPath $TargetOrgUnitPath -WhatIf:$WhatIf
-# }
-#}
+$staleComputerObjs | ForEach-Object {
+ $oldOu = $_.DistinguishedName
+ $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU:$oldOU"
+ Write-Host ('[{0}] Disabling stale object' -f $_.name)
+ Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
+ foreach ($ou in $ExcludedOUs) {
+  if ($_.DistinguishedName -like "*$ou*") {
+   Write-Verbose "$($_.name),Excluded OU. Skipping this computer object"
+   continue
+  }
+  Write-Host ('[{0}] Moving stale object' -f $_.name)
+  Move-ADObject -Identity $_.ObjectGUID -TargetPath $TargetOrgUnitPath -WhatIf:$WhatIf
+ }
+}
 
 $DeadParams = @{
  Filter     = { Enabled -eq $False }
