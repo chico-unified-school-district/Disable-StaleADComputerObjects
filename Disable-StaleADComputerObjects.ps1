@@ -52,9 +52,10 @@ $staleComputerObjs = Get-ADComputer @params | Where-Object {
 Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Object).count)
 
 $staleComputerObjs | ForEach-Object {
- $oldOu = $_.DistinguishedName
- $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU:$oldOU"
- Write-Host ('[{0}] Disabling stale object' -f $_.name)
+ # $oldOu = $_.DistinguishedName
+ $oldOu = $_.DistinguishedName -ireplace "CN=$($_.Name),", ''
+ $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU: $oldOU"
+ Write-Host ('[{0}] Disabling stale object,[{1}]' -f $_.name, $desc) -Fore Blue
  Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
  foreach ($ou in $ExcludedOUs) {
   if ($_.DistinguishedName -like "*$ou*") {
