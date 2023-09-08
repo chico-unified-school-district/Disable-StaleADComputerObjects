@@ -74,15 +74,18 @@ $DeadParams = @{
 }
 
 $DeadComputerObjects = Get-ADComputer @DeadParams |
- Where-Object {[datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)} |
- Sort-Object LastLogonTimeStamp
+Where-Object {
+ ([datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)) -and
+ ($_.DistinguishedName -notlike '*servers*')
+} |
+Sort-Object LastLogonTimeStamp
 
 $DeadComputerObjects |
 ForEach-Object {
-$LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
-Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
-Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
-                }
+ $LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
+ Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
+ Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
+}
 
 Write-Host ('Dead Computer Objects: {0}' -f ($DeadComputerObjects | Measure-Object).count)
 
