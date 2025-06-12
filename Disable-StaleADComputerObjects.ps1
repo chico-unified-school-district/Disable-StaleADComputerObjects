@@ -28,9 +28,8 @@ if ($WhatIf) { Show-TestRun }
 
 Get-PSSession | Remove-PSSession
 
-$dc = Select-DomainController $DomainControllers
 $cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject', 'Remove-ADObject'
-New-ADSession -dc $dc -cmdlets $cmdlets -cred $ADCredential
+Connect-ADSession -DomainControllers $DomainControllers -Cred $ADCredential -Cmdlets $cmdlets
 
 $cutoff = (Get-date).addyears(-1)
 
@@ -69,18 +68,18 @@ $DeadParams = @{
 }
 
 $DeadComputerObjects = Get-ADComputer @DeadParams |
-Where-Object {
+    Where-Object {
  ([datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)) -and
  ($_.DistinguishedName -notlike '*servers*')
-} |
-Sort-Object LastLogonTimeStamp
+    } |
+        Sort-Object LastLogonTimeStamp
 
 $DeadComputerObjects |
-ForEach-Object {
-    $LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
-    Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
-    Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
-}
+    ForEach-Object {
+        $LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
+        Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
+        Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
+    }
 
 Write-Host ('Dead Computer Objects: {0}' -f ($DeadComputerObjects | Measure-Object).count)
 
