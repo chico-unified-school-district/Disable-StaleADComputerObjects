@@ -63,6 +63,7 @@ function Remove-Stale ( [pscredential]$cred) {
  process {
   $params = @{
    Identity   = $_.ObjectGUID
+   Confirm    = $false
    Credential = $cred
    WhatIf     = $WhatIf
   }
