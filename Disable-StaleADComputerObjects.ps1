@@ -33,7 +33,7 @@ Connect-ADSession -DomainControllers $DomainControllers -Cred $ADCredential -Cmd
 
 $cutoff = (Get-date).addyears(-1)
 
-$params = @{
+$params = @{`
     Filter     = { Enabled -eq $True }
     Properties = 'lastLogonTimestamp'
     SearchBase = $SourceOrgUnitPath
