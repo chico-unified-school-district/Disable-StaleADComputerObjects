@@ -5,84 +5,106 @@ without extra effort.
 #>
 [cmdletbinding()]
 param (
-    [Parameter(Position = 0, Mandatory = $True)]
-    [Alias('DCs')]
-    [string[]]$DomainControllers,
-    [Parameter(Position = 1, Mandatory = $True)]
-    [Alias('ADCred')]
-    [System.Management.Automation.PSCredential]$ADCredential,
-    [Parameter(Position = 2, Mandatory = $True)]
-    [Alias('SrcOU')]
-    [string]$SourceOrgUnitPath,
-    [Parameter(Position = 3, Mandatory = $True)]
-    [Alias('TargOU')]
-    [string]$TargetOrgUnitPath,
-    [Parameter(Position = 4, Mandatory = $False)]
-    [Alias('ExOU')]
-    [string[]]$ExcludedOUs,
-    [Alias('wi')]
-    [switch]$WhatIf
+ [Parameter(Mandatory = $True)][PSCredential]$ADCredential,
+ [Parameter( Mandatory = $True)][string]$TargetOrgUnitPath,
+ [Parameter(Mandatory = $False)][string[]]$ExcludedOUs,
+ [Alias('wi')][switch]$WhatIf
 )
+function Get-StaleComputers ( [pscredential]$cred) {
+ $props = 'Name', 'DistinguishedName', 'ObjectGUID', 'LastLogonDate', 'OperatingSystem', 'Enabled'
+ $cutoffDate = (Get-Date 12:00AM).AddYears(-1)
+ $filter = "LastLogonDate -lt `$cutoffDate -and -not(OperatingSystem -like '*Server*')"
+ $params = @{
+  Filter     = $filter
+  Properties = $props
+  Credential = $cred
+ }
+ $result = Get-ADComputer @params | Where-Object {
+  $_.DistinguishedName -notlike "*$ExcludedOUs*" -and
+  $_.DistinguishedName -notlike '*Server*' -and
+  $_.OperatingSystem -notlike '*Server*'
+ } | Select-Object -Property $props
+ Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, @($result).Count)
+ $result
+}
+
+function Disable-Stale ( [pscredential]$cred) {
+ process {
+  $oldOU = $_.DistinguishedName -ireplace "CN=$($_.Name),", ''
+  $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU: $oldOU"
+  $params = @{
+   Identity    = $_.ObjectGUID
+   Enabled     = $false
+   Description = $desc
+   Credential  = $cred
+   WhatIf      = $WhatIf
+  }
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.name, $desc) -F Darkblue
+  Set-ADComputer @params
+  $_
+ }
+}
+
+function Move-Stale ( $ou, [pscredential]$cred) {
+ process {
+  $params = @{
+   Identity   = $_.ObjectGUID
+   TargetPath = $ou
+   Credential = $cred
+   WhatIf     = $WhatIf
+  }
+  Write-Host ('{0},{1},{2}' -f $MyInvocation.MyCommand.Name, $_.name, $ou) -F Blue
+  Move-ADObject @params
+  $_
+ }
+}
+
+function Remove-Stale ( [pscredential]$cred) {
+ process {
+  $params = @{
+   Identity   = $_.ObjectGUID
+   Credential = $cred
+   WhatIf     = $WhatIf
+  }
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.name) -F Red
+  Remove-ADObject @params
+  $_
+ }
+}
+
+function Select-Enabled {
+ process {
+  $_ | Where-Object { $_.Enabled -eq $true }
+ }
+}
+
+function Select-OldStale {
+ process {
+  $_ | Where-Object { $_.Enabled -eq $false -and $_.LastLogonDate -lt (Get-Date).AddYears(-2) }
+ }
+}
+
+function Show-Object {
+ process {
+  Write-Verbose ($_ | Out-String)
+ }
+}
+
+# ===============================================================================================================
+Import-Module CommonScriptFunctions
+Import-Module -Name ActiveDirectory -Cmdlet Get-ADComputer, Set-ADComputer, Move-ADObject, Remove-ADObject -WarningAction SilentlyContinue -ErrorAction Stop
 
 if ($WhatIf) { Show-TestRun }
 
-Get-PSSession | Remove-PSSession
+$staleComputers = Get-StaleComputers -cred $ADCredential
+$staleComputers |
+ Select-Enabled |
+  Disable-Stale -cred $ADCredential |
+   Move-Stale -ou $TargetOrgUnitPath -cred $ADCredential |
+    Show-Object
+$staleComputers |
+ Select-OldStale |
+  Remove-Stale -cred $ADCredential |
+   Show-Object
 
-$cmdlets = 'Get-ADComputer', 'Set-ADComputer', 'Move-ADObject', 'Remove-ADObject'
-Connect-ADSession -DomainControllers $DomainControllers -Cred $ADCredential -Cmdlets $cmdlets
-
-$cutoff = (Get-date).addyears(-1)
-
-$params = @{`
-    Filter     = { Enabled -eq $True }
-    Properties = 'lastLogonTimestamp'
-    SearchBase = $SourceOrgUnitPath
-}
-
-$staleComputerObjs = Get-ADComputer @params | Where-Object {
-    [datetime]::FromFileTime($_.lastLogonTimestamp) -lt $cutoff -and
-    $_.Enabled -eq $True
-}
-
-Write-Host ('Stale Computer Objects: {0}' -f ($staleComputerObjs | Measure-Object).count)
-
-$staleComputerObjs | ForEach-Object {
-    $oldOu = $_.DistinguishedName -ireplace "CN=$($_.Name),", ''
-    $desc = "Disabled by Jenkins:$(Get-Date -f 'yyyy-MM-dd') OldOU: $oldOU"
-    Write-Host ('[{0}] Disabling stale object,[{1}]' -f $_.name, $desc) -Fore Blue
-    Set-ADComputer -Identity $_.ObjectGUID -Enabled $false -Description $desc -WhatIf:$WhatIf
-    foreach ($ou in $ExcludedOUs) {
-        if ($_.DistinguishedName -like "*$ou*") {
-            Write-Verbose "$($_.name),Excluded OU. Skipping this computer object"
-            continue
-        }
-        Write-Host ('[{0}] Moving stale object' -f $_.name)
-        Move-ADObject -Identity $_.ObjectGUID -TargetPath $TargetOrgUnitPath -WhatIf:$WhatIf
-    }
-}
-
-$DeadParams = @{
-    Filter     = { Enabled -eq $False }
-    Properties = 'lastLogonTimestamp'
-    SearchBase = $TargetOrgUnitPath
-}
-
-$DeadComputerObjects = Get-ADComputer @DeadParams |
-    Where-Object {
- ([datetime]::FromFileTime($_.lastLogonTimestamp) -lt (Get-Date).AddYears(-2)) -and
- ($_.DistinguishedName -notlike '*servers*')
-    } |
-        Sort-Object LastLogonTimeStamp
-
-$DeadComputerObjects |
-    ForEach-Object {
-        $LastLogonDate = [datetime]::FromFileTime($_.lastLogonTimestamp)
-        Write-Host ('Deleting {0} {1}' -F $_.Name , $LastLogonDate) -F Cyan
-        Remove-ADObject -Identity $_.ObjectGUID -Recursive -Confirm:$False -WhatIf:$WhatIf
-    }
-
-Write-Host ('Dead Computer Objects: {0}' -f ($DeadComputerObjects | Measure-Object).count)
-
-Write-Verbose "Tearing down sessions"
-Get-PSSession | Remove-PSSession
 if ($WhatIf) { Show-TestRun }
