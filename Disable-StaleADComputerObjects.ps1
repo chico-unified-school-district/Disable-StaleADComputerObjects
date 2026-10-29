@@ -28,6 +28,20 @@ function Get-StaleComputers ( [pscredential]$cred) {
  $result
 }
 
+function Disable-ProtectFromAccidentalDeletion ( [pscredential]$cred) {
+ process {
+  $params = @{
+   Identity                        = $_.ObjectGUID
+   ProtectedFromAccidentalDeletion = $false
+   Credential                      = $cred
+   WhatIf                          = $WhatIf
+  }
+  Write-Host ('{0},{1}' -f $MyInvocation.MyCommand.Name, $_.name) -F Darkred
+  Set-ADObject @params
+  $_
+ }
+}
+
 function Disable-Stale ( [pscredential]$cred) {
  process {
   $oldOU = $_.DistinguishedName -ireplace "CN=$($_.Name),", ''
@@ -63,6 +77,7 @@ function Remove-Stale ( [pscredential]$cred) {
  process {
   $params = @{
    Identity   = $_.ObjectGUID
+   Recursive  = $true
    Confirm    = $false
    Credential = $cred
    WhatIf     = $WhatIf
@@ -105,7 +120,8 @@ $staleComputers |
     Show-Object
 $staleComputers |
  Select-OldStale |
-  Remove-Stale -cred $ADCredential |
-   Show-Object
+  Disable-ProtectFromAccidentalDeletion -cred $ADCredential |
+   Remove-Stale -cred $ADCredential |
+    Show-Object
 
 if ($WhatIf) { Show-TestRun }
